@@ -14,7 +14,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 
 @Service
@@ -36,6 +38,75 @@ public class CategoryServiceImpl implements CategoryService {
         return convertToResponce(newCategory);
     }
 
+    @Override
+    public List<CategoryResponce> getAll() {
+        return categoryRepository.findAll().stream()
+                .map(this::convertToResponce)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public CategoryResponce getCategoryById(String categoryId) {
+        CategoryEntity category = categoryRepository.findByCategoryId(categoryId)
+                .orElseThrow(() -> new RuntimeException("Category not found with ID: " + categoryId));
+        return convertToResponce(category);
+    }
+
+    @Override
+    public CategoryResponce update(String categoryId, CategoryRequest request) throws IOException {
+        CategoryEntity existingCategory = categoryRepository.findByCategoryId(categoryId)
+                .orElseThrow(() -> new RuntimeException("Category not found with ID: " + categoryId));
+
+        // 1. Check if name is sent. If yes, update it. If no, keep the old one.
+        if (request.getName() != null && !request.getName().isEmpty()) {
+            existingCategory.setName(request.getName());
+        }
+
+        // 2. Check if description is sent.
+        if (request.getDescription() != null && !request.getDescription().isEmpty()) {
+            existingCategory.setDescription(request.getDescription());
+        }
+
+        // 3. Check if bgColor is sent.
+        if (request.getBgColor() != null && !request.getBgColor().isEmpty()) {
+            existingCategory.setBgColor(request.getBgColor());
+        }
+
+        // Handle Image Update
+        if (request.getImage() != null && !request.getImage().isEmpty()) {
+            // 1. Delete old image if it exists
+            if (existingCategory.getImgUrl() != null) {
+                deleteImageFile(existingCategory.getImgUrl());
+            }
+            // 2. Save new image
+            String newImgUrl = saveImage(request.getImage());
+            existingCategory.setImgUrl(newImgUrl);
+        }
+
+        CategoryEntity updatedCategory = categoryRepository.save(existingCategory);
+        return convertToResponce(updatedCategory);
+    }
+
+    @Override
+    public void delete(String categoryId) throws IOException {
+        CategoryEntity existingCategory = categoryRepository.findByCategoryId(categoryId)
+                .orElseThrow(() -> new RuntimeException("Category not found with ID: " + categoryId));
+
+        // Delete the associated image file from disk
+        if (existingCategory.getImgUrl() != null) {
+            deleteImageFile(existingCategory.getImgUrl());
+        }
+
+        categoryRepository.delete(existingCategory);
+    }
+
+    private void deleteImageFile(String imgUrl) throws IOException {
+
+        String filename = imgUrl.substring(imgUrl.lastIndexOf("/") + 1);
+        Path filePath = Paths.get(UPLOAD_DIR).resolve(filename);
+
+        Files.deleteIfExists(filePath);
+    }
     private String saveImage(MultipartFile file) throws IOException {
         // Ensure directory exists
         Path uploadPath = Paths.get(UPLOAD_DIR);
@@ -43,15 +114,10 @@ public class CategoryServiceImpl implements CategoryService {
             Files.createDirectories(uploadPath);
         }
 
-        // Generate unique filename (e.g., "abc-123.png")
         String filename = file.getOriginalFilename();
         Path filePath = uploadPath.resolve(filename);
 
-        // Save file to disk
         Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
-
-        // Return the relative URL (how the frontend will access it)
-        // We will configure Spring to serve "uploads" folder at "/uploads/**"
         return "uploads/" + filename;
     }
     private CategoryResponce convertToResponce(CategoryEntity newCategory) {
