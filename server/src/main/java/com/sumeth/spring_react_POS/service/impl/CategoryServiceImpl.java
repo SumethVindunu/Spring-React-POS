@@ -24,7 +24,7 @@ import java.util.stream.Collectors;
 public class CategoryServiceImpl implements CategoryService {
 
     private final CategoryRepository categoryRepository;
-    private final String UPLOAD_DIR = System.getProperty("user.dir") + "/uploads/";
+    private final String UPLOAD_DIR = "C:/Users/sumet/Desktop/project/Spring-React-POS/client/public/images/";
 
     @Override
     public CategoryResponce add(CategoryRequest request) throws IOException {
@@ -118,7 +118,7 @@ public class CategoryServiceImpl implements CategoryService {
         Path filePath = uploadPath.resolve(filename);
 
         Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
-        return "uploads/" + filename;
+        return "/images/" + filename;
     }
     private CategoryResponce convertToResponce(CategoryEntity newCategory) {
         return CategoryResponce.builder()
