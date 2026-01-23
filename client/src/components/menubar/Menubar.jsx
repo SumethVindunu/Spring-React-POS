@@ -1,6 +1,11 @@
 import 'bootstrap-icons/font/bootstrap-icons.css'
 import { NavLink, Link } from "react-router-dom"
+import { useTheme } from "../../context/ThemeContext.jsx"
+
 const Menubar = () => {
+
+    const { isDarkMode, toggleTheme } = useTheme() // <-- Theme state
+
     return (
         <nav className="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
             <div className="container">
@@ -61,6 +66,16 @@ const Menubar = () => {
                             </Link>
                         </li>
 
+
+                        {/* Theme Toggle Button */}
+                        <li className="nav-item ms-lg-3">
+                            <button
+                                className={`btn btn-sm ${isDarkMode ? "btn-light text-dark" : "btn-dark text-white"}`}
+                                onClick={toggleTheme}
+                            >
+                                {isDarkMode ? "Light Mode" : "Dark Mode"}
+                            </button>
+                        </li>
 
                         {/* Button */}
                         <li className="nav-item ms-lg-3">

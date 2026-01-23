@@ -6,13 +6,14 @@ import {
     fetchCategoryById,
     updateCategory
 } from "../../service/CategoryService.js"
-import configaration from "../../assets/configaration.js"
+import { useTheme } from "../../context/ThemeContext"
 import { ToastContainer, toast } from "react-toastify"
 import "react-toastify/dist/ReactToastify.css"
 
 const ManageCategory = () => {
 
-    const isDarkMode = configaration.theme
+    const { isDarkMode } = useTheme()
+
 
     // Dynamic classes based on the boolean above
     const theme = {
