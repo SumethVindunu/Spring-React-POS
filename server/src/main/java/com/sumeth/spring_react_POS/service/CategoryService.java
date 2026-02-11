@@ -9,9 +9,13 @@ import java.util.List;
 public interface CategoryService {
 
     CategoryResponce add(CategoryRequest request) throws IOException;
+
     List<CategoryResponce> getAll();
+
     CategoryResponce getCategoryById(String categoryId);
+
     CategoryResponce update(String categoryId, CategoryRequest request) throws IOException;
+
     void delete(String categoryId) throws IOException;
 }
 

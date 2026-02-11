@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const BASE_URL = "http://localhost:8080/api/v1.0/categories";
+const BASE_URL = "http://localhost:8080/api/v1.0/admin/categories";
 
 export const addCategory = async (categoryFormData) => {
     return await axios.post(BASE_URL, categoryFormData);

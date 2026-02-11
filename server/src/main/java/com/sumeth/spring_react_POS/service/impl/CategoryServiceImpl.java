@@ -56,7 +56,20 @@ public class CategoryServiceImpl implements CategoryService {
         CategoryEntity existingCategory = categoryRepository.findByCategoryId(categoryId)
                 .orElseThrow(() -> new RuntimeException("Category not found with ID: " + categoryId));
 
-        // Update fields as before...
+        // 1. Check if name is sent. If yes, update it. If no, keep the old one.
+        if (request.getName() != null && !request.getName().isEmpty()) {
+            existingCategory.setName(request.getName());
+        }
+
+        // 2. Check if description is sent.
+        if (request.getDescription() != null && !request.getDescription().isEmpty()) {
+            existingCategory.setDescription(request.getDescription());
+        }
+
+        // 3. Check if bgColor is sent.
+        if (request.getBgColor() != null && !request.getBgColor().isEmpty()) {
+            existingCategory.setBgColor(request.getBgColor());
+        }
 
         // Handle Image Update
         if (request.getImage() != null && !request.getImage().isEmpty()) {
