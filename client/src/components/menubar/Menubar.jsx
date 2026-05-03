@@ -5,6 +5,9 @@ import { useTheme } from "../../context/ThemeContext.jsx"
 const Menubar = () => {
 
     const { isDarkMode, toggleTheme } = useTheme() // <-- Theme state
+    const role = localStorage.getItem("role");
+    console.log(role);
+    // const role = "ROLE_ADMIN";
 
     return (
         <nav className="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
@@ -45,26 +48,30 @@ const Menubar = () => {
                             </Link>
                         </li>
 
-                        <li className="nav-item">
-                            <Link className="nav-link" to="/items">
-                                <i className="bi bi-gear me-1"></i>
-                                Manage Items
-                            </Link>
-                        </li>
+                        {role === "ROLE_ADMIN" && (
+                            <>
+                                <li className="nav-item">
+                                    <Link className="nav-link" to="/items">
+                                        <i className="bi bi-gear me-1"></i>
+                                        Manage Items
+                                    </Link>
+                                </li>
 
-                        <li className="nav-item">
-                            <Link className="nav-link" to="/category">
-                                <i className="bi bi-gear me-1"></i>
-                                Manage Categories
-                            </Link>
-                        </li>
+                                <li className="nav-item">
+                                    <Link className="nav-link" to="/category">
+                                        <i className="bi bi-gear me-1"></i>
+                                        Manage Categories
+                                    </Link>
+                                </li>
 
-                        <li className="nav-item">
-                            <Link className="nav-link" to="/users">
-                                <i className="bi bi-people me-1"></i>
-                                Manage Users
-                            </Link>
-                        </li>
+                                <li className="nav-item">
+                                    <Link className="nav-link" to="/users">
+                                        <i className="bi bi-people me-1"></i>
+                                        Manage Users
+                                    </Link>
+                                </li>
+                            </>
+                        )}
 
 
                         {/* Theme Toggle Button */}
@@ -77,12 +84,19 @@ const Menubar = () => {
                             </button>
                         </li>
 
-                        {/* Button */}
-                        <li className="nav-item ms-lg-3">
-                            <button className="btn btn-outline-light btn-sm">
-                                <i className="bi bi-box-arrow-in-right me-1"></i>
-                                Login
-                            </button>
+                        {/* Auth Buttons */}
+                        <li className="nav-item ms-lg-3 mt-3 mt-lg-0">
+                            {localStorage.getItem("token") ? (
+                                <Link to="/profile" className={`btn btn-sm ${isDarkMode ? "btn-outline-primary" : "btn-primary"}`}>
+                                    <i className="bi bi-person-circle me-1"></i>
+                                    Profile
+                                </Link>
+                            ) : (
+                                <Link to="/login" className={`btn btn-sm ${isDarkMode ? "btn-outline-light" : "btn-outline-dark"}`}>
+                                    <i className="bi bi-box-arrow-in-right me-1"></i>
+                                    Login
+                                </Link>
+                            )}
                         </li>
 
                     </ul>
