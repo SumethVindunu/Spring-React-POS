@@ -36,6 +36,7 @@ const Login = () => {
             localStorage.setItem("username", data.email);
             localStorage.setItem("role", data.role);
             localStorage.setItem("token", data.token);
+            localStorage.setItem("name", data.name);
 
             toast.success("Login successful!");
             window.location.href = "/dashboard"; // Full reload to update Menubar safely

@@ -6,8 +6,10 @@ import CustomerForm from "../../components/CustomerForm/CustomerForm"
 import ItemList from "../../components/ItemList/ItemList"
 import { useTheme } from "../../context/ThemeContext"
 import CheckoutModal from "../../components/CheckoutModal/CheckoutModal"
+import { addOrder } from "../../service/OrderService"
 
 const Explore = () => {
+
   const { isDarkMode } = useTheme()
 
   const [selectedCategoryId, setSelectedCategoryId] = useState(null)
@@ -20,13 +22,12 @@ const Explore = () => {
     phone: ""
   })
 
-  // ➕ ADD TO CART (with stock check)
+  // ADD TO CART
   const addToCart = (item) => {
     setCart((prev) => {
       const existing = prev.find(ci => ci.itemId === item.itemId)
 
       if (!existing) {
-        if (item.qty <= 0) return prev // ❌ no stock
         return [...prev, { ...item, qty: 1 }]
       }
 
@@ -66,14 +67,58 @@ const Explore = () => {
 
   const total = cart.reduce((sum, it) => sum + it.qty * it.price, 0)
 
-  const processOrder = () => {
+// ...existing code...
+const processOrder = async () => {
+
+  try {
+
+    const cashierName = localStorage.getItem("username") || "" // <-- read username
+
+    const payload = {
+      customerName: customer.name,
+      phoneNumber: customer.phone,
+
+      cartItems: cart.map(item => ({
+        itemId: item.itemId,
+        name: item.name,
+        price: item.price,
+        quantity: item.qty
+      })),
+
+      totalAmount: total,
+      // match server field name (it's "cashReceivedived" in OrderRequest)
+      cashReceivedived: cash,
+      changeAmount: cash - total,
+      cashierName
+    }
+
+    const response = await addOrder(payload)
+
+    console.log(response.data)
+
     alert("Order Placed Successfully!")
 
     setCart([])
     setCash(0)
     setShowCheckout(false)
-    setCustomer({ name: "", phone: "" })
+    setCustomer({
+      name: "",
+      phone: ""
+    })
+
+  } catch (error) {
+
+    // show full server response to diagnose 500s
+    console.error("Order Error:", error)
+    if (error.response) {
+      console.error("Server response:", error.response.status, error.response.data)
+      alert(`Failed to place order: ${error.response.status} - ${JSON.stringify(error.response.data)}`)
+    } else {
+      alert("Failed to place order")
+    }
   }
+}
+// ...existing code...
 
   const theme = {
     container: isDarkMode ? "bg-dark min-vh-100" : "bg-light min-vh-100",
@@ -96,6 +141,7 @@ const Explore = () => {
             <div className={`card-header px-4 py-3 ${theme.cardHeader}`}>
               <h5 className="fw-bold mb-0">Display Category</h5>
             </div>
+
             <div className="card-body px-4 py-3">
               <CategoryList
                 selectedCategoryId={selectedCategoryId}
@@ -108,11 +154,12 @@ const Explore = () => {
             <div className={`card-header px-4 py-3 ${theme.cardHeader}`}>
               <h5 className="fw-bold mb-0">Display Items</h5>
             </div>
+
             <div className="card-body px-4 py-3">
               <ItemList
                 selectedCategoryId={selectedCategoryId}
                 onAddToCart={addToCart}
-                cart={cart}   // ✅ IMPORTANT
+                cart={cart}
               />
             </div>
           </div>
@@ -126,6 +173,7 @@ const Explore = () => {
             <div className={`card-header px-4 py-3 ${theme.cardHeader}`}>
               <h5 className="fw-bold mb-0">Cart Summary</h5>
             </div>
+
             <div className="card-body px-4 py-3">
               <CartSummary
                 cart={cart}
@@ -138,6 +186,7 @@ const Explore = () => {
             <div className={`card-header px-4 py-3 ${theme.cardHeader}`}>
               <h5 className="fw-bold mb-0">Cart Items</h5>
             </div>
+
             <div className="card-body px-4 py-3">
               <CartItems
                 cart={cart}
@@ -153,8 +202,12 @@ const Explore = () => {
             <div className={`card-header px-4 py-3 ${theme.cardHeader}`}>
               <h5 className="fw-bold mb-0">Customer Form</h5>
             </div>
+
             <div className="card-body px-4 py-3">
-              <CustomerForm customer={customer} setCustomer={setCustomer} />
+              <CustomerForm
+                customer={customer}
+                setCustomer={setCustomer}
+              />
             </div>
           </div>
 
