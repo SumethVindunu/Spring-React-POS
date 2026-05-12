@@ -6,12 +6,15 @@ import { useTheme } from "../../context/ThemeContext";
 import {
   BarChart,
   Bar,
+  PieChart,
+  Pie,
+  Cell,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
+  Legend,
   ResponsiveContainer,
-  Cell,
 } from "recharts";
 import {
   Package,
@@ -29,6 +32,8 @@ const ORDERS_API = "http://localhost:8080/api/v1.0/admin/orders";
 const ITEMS_API = "http://localhost:8080/api/v1.0/admin/items";
 
 const Dashboard = () => {
+
+  
   const { isDarkMode } = useTheme();
 
   const storedRole = localStorage.getItem("role") || "";
@@ -88,6 +93,7 @@ const Dashboard = () => {
   const [orders, setOrders] = useState([]);
   const [items, setItems] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
+  const [dateFilteredOrders, setDateFilteredOrders] = useState([]);
   const [loading, setLoading] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -445,6 +451,55 @@ const Dashboard = () => {
     setShowDetails(false);
   };
 
+
+    // ===== HIGH DEMAND ITEMS =====
+    const highDemandItems = useMemo(() => {
+      const itemMap = {};
+  
+      filteredOrders.forEach((order) => {
+        (order.items || []).forEach((item) => {
+          const key = item.name;
+  
+          if (!itemMap[key]) {
+            itemMap[key] = {
+              name: item.name,
+              quantity: 0,
+              revenue: 0,
+            };
+          }
+  
+          itemMap[key].quantity += Number(item.quantity || 0);
+  
+          itemMap[key].revenue +=
+            Number(item.quantity || 0) *
+            Number(item.price || 0);
+        });
+      });
+  
+      return Object.values(itemMap)
+        .sort((a, b) => b.quantity - a.quantity)
+        .slice(0, 10);
+    }, [filteredOrders]);
+
+
+    const pieColors = [
+      "#3b82f6",
+      "#10b981",
+      "#f59e0b",
+      "#ef4444",
+      "#8b5cf6",
+      "#06b6d4",
+      "#ec4899",
+      "#22c55e",
+      "#f97316",
+      "#6366f1",
+    ];
+
+  // ===== HIGHEST REVENUE ITEM (memoized) =====
+  const highestRevenueItem = useMemo(() => {
+    return [...highDemandItems].sort((a, b) => b.revenue - a.revenue)[0];
+  }, [highDemandItems]);
+
   // ===== RENDER =====
   return (
     <>
@@ -454,15 +509,11 @@ const Dashboard = () => {
         theme={isDarkMode ? "dark" : "light"}
       />
 
-      <div
-        className={`container-fluid p-4 ${theme.container}`}
-      >
+      <div className={`container-fluid p-4 ${theme.container}`}>
         {/* ===== HEADER ===== */}
         <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
           <div>
-            <h2 className={`fw-bold ${theme.text}`}>
-              Dashboard
-            </h2>
+            <h2 className={`fw-bold ${theme.text}`}>Dashboard</h2>
 
             <p className={theme.textMuted}>
               Overview of your store performance
@@ -472,40 +523,29 @@ const Dashboard = () => {
           <div className="d-flex gap-2 align-items-center flex-wrap">
             <div
               className={`d-flex align-items-center gap-2 p-2 rounded-3 ${
-                isDarkMode
-                  ? "bg-secondary bg-opacity-10"
-                  : "bg-white shadow-sm"
+                isDarkMode ? "bg-secondary bg-opacity-10" : "bg-white shadow-sm"
               }`}
             >
-              <Calendar
-                size={16}
-                className={theme.textMuted}
-              />
+              <Calendar size={16} className={theme.textMuted} />
 
               <input
                 type="date"
                 className={`form-control form-control-sm border-0 ${theme.input}`}
                 value={dateFrom}
-                onChange={(e) =>
-                  setDateFrom(e.target.value)
-                }
+                onChange={(e) => setDateFrom(e.target.value)}
                 style={{
                   width: "130px",
                   background: "transparent",
                 }}
               />
 
-              <span className={theme.textMuted}>
-                -
-              </span>
+              <span className={theme.textMuted}>-</span>
 
               <input
                 type="date"
                 className={`form-control form-control-sm border-0 ${theme.input}`}
                 value={dateTo}
-                onChange={(e) =>
-                  setDateTo(e.target.value)
-                }
+                onChange={(e) => setDateTo(e.target.value)}
                 style={{
                   width: "130px",
                   background: "transparent",
@@ -525,10 +565,7 @@ const Dashboard = () => {
               className="btn btn-primary rounded-pill px-4"
               onClick={loadData}
             >
-              <TrendingUp
-                size={18}
-                className="me-1"
-              />
+              <TrendingUp size={18} className="me-1" />
               Refresh
             </button>
 
@@ -536,10 +573,7 @@ const Dashboard = () => {
               className="btn btn-success rounded-pill px-4"
               onClick={generateReport}
             >
-              <FileText
-                size={18}
-                className="me-1"
-              />
+              <FileText size={18} className="me-1" />
               Get Report
             </button>
           </div>
@@ -548,26 +582,16 @@ const Dashboard = () => {
         {/* ===== STAT CARDS ===== */}
         <div className="row g-4 mb-4">
           <div className="col-md-4">
-            <div
-              className={`card rounded-4 p-4 ${theme.statCard}`}
-            >
+            <div className={`card rounded-4 p-4 ${theme.statCard}`}>
               <div className="d-flex align-items-center">
                 <div className="rounded-circle bg-primary bg-opacity-10 p-3 me-3">
-                  <ShoppingCart
-                    size={28}
-                    className="text-primary"
-                  />
+                  <ShoppingCart size={28} className="text-primary" />
                 </div>
 
                 <div>
-                  <p className={theme.textMuted}>
-                    Total Orders
-                  </p>
+                  <p className={theme.textMuted}>Total Orders</p>
 
-                  <h2
-                    className="fw-bold mb-0"
-                    style={{ color: "#3b82f6" }}
-                  >
+                  <h2 className="fw-bold mb-0" style={{ color: "#3b82f6" }}>
                     {totals.totalOrders}
                   </h2>
                 </div>
@@ -576,37 +600,25 @@ const Dashboard = () => {
           </div>
 
           <div className="col-md-4">
-            <div
-              className={`card rounded-4 p-4 ${theme.statCard}`}
-            >
+            <div className={`card rounded-4 p-4 ${theme.statCard}`}>
               <div className="d-flex align-items-center">
                 <div className="rounded-circle bg-success bg-opacity-10 p-3 me-3">
-                  <DollarSign
-                    size={28}
-                    className="text-success"
-                  />
+                  <DollarSign size={28} className="text-success" />
                 </div>
 
                 <div>
-                  <p className={theme.textMuted}>
-                    Total Revenue
-                  </p>
+                  <p className={theme.textMuted}>Total Revenue</p>
 
                   <h2
                     className="fw-bold mb-0"
                     style={{
-                      color: isDarkMode
-                        ? "#4ade80"
-                        : "#16a34a",
+                      color: isDarkMode ? "#4ade80" : "#16a34a",
                     }}
                   >
                     Rs.{" "}
-                    {totals.totalRevenue.toLocaleString(
-                      undefined,
-                      {
-                        minimumFractionDigits: 2,
-                      }
-                    )}
+                    {totals.totalRevenue.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                    })}
                   </h2>
                 </div>
               </div>
@@ -614,21 +626,14 @@ const Dashboard = () => {
           </div>
 
           <div className="col-md-4">
-            <div
-              className={`card rounded-4 p-4 ${theme.statCard}`}
-            >
+            <div className={`card rounded-4 p-4 ${theme.statCard}`}>
               <div className="d-flex align-items-center">
                 <div className="rounded-circle bg-warning bg-opacity-10 p-3 me-3">
-                  <AlertTriangle
-                    size={28}
-                    className="text-warning"
-                  />
+                  <AlertTriangle size={28} className="text-warning" />
                 </div>
 
                 <div>
-                  <p className={theme.textMuted}>
-                    Low Stock Items
-                  </p>
+                  <p className={theme.textMuted}>Low Stock Items</p>
 
                   <h2 className="fw-bold mb-0 text-warning">
                     {totals.lowStockCount}
@@ -642,29 +647,17 @@ const Dashboard = () => {
         {/* ===== LOW STOCK SECTION ===== */}
         <div className="row g-4 mb-4">
           <div className="col-lg-6">
-            <div
-              className={`card rounded-4 ${theme.card}`}
-            >
-              <div
-                className={`card-header py-3 ${theme.cardHeader}`}
-              >
-                <h5
-                  className={`fw-bold mb-0 ${theme.text}`}
-                >
-                  <AlertTriangle
-                    size={20}
-                    className="me-2 text-warning"
-                  />
+            <div className={`card rounded-4 ${theme.card}`}>
+              <div className={`card-header py-3 ${theme.cardHeader}`}>
+                <h5 className={`fw-bold mb-0 ${theme.text}`}>
+                  <AlertTriangle size={20} className="me-2 text-warning" />
                   Low Stock Items (Qty ≤ 10)
                 </h5>
               </div>
 
               <div className="card-body">
                 {chartData.length > 0 ? (
-                  <ResponsiveContainer
-                    width="100%"
-                    height={280}
-                  >
+                  <ResponsiveContainer width="100%" height={280}>
                     <BarChart
                       data={chartData}
                       margin={{
@@ -676,19 +669,13 @@ const Dashboard = () => {
                     >
                       <CartesianGrid
                         strokeDasharray="3 3"
-                        stroke={
-                          isDarkMode
-                            ? "#374151"
-                            : "#e5e7eb"
-                        }
+                        stroke={isDarkMode ? "#374151" : "#e5e7eb"}
                       />
 
                       <XAxis
                         dataKey="name"
                         tick={{
-                          fill: isDarkMode
-                            ? "#9ca3af"
-                            : "#6b7280",
+                          fill: isDarkMode ? "#9ca3af" : "#6b7280",
 
                           fontSize: 12,
                         }}
@@ -696,30 +683,22 @@ const Dashboard = () => {
 
                       <YAxis
                         tick={{
-                          fill: isDarkMode
-                            ? "#9ca3af"
-                            : "#6b7280",
+                          fill: isDarkMode ? "#9ca3af" : "#6b7280",
                         }}
                       />
 
                       <Tooltip
                         contentStyle={{
-                          backgroundColor: isDarkMode
-                            ? "#1f2937"
-                            : "#fff",
+                          backgroundColor: isDarkMode ? "#1f2937" : "#fff",
 
                           border: `1px solid ${
-                            isDarkMode
-                              ? "#374151"
-                              : "#e5e7eb"
+                            isDarkMode ? "#374151" : "#e5e7eb"
                           }`,
 
                           borderRadius: "8px",
                         }}
                         labelStyle={{
-                          color: isDarkMode
-                            ? "#fff"
-                            : "#000",
+                          color: isDarkMode ? "#fff" : "#000",
                         }}
                       />
 
@@ -728,34 +707,26 @@ const Dashboard = () => {
                         name="Quantity"
                         radius={[4, 4, 0, 0]}
                       >
-                        {chartData.map(
-                          (entry, index) => (
-                            <Cell
-                              key={`cell-${index}`}
-                              fill={
-                                entry.quantity <= 5
-                                  ? "#ef4444"
-                                  : entry.quantity <=
-                                    10
-                                  ? "#f59e0b"
-                                  : "#22c55e"
-                              }
-                            />
-                          )
-                        )}
+                        {chartData.map((entry, index) => (
+                          <Cell
+                            key={`cell-${index}`}
+                            fill={
+                              entry.quantity <= 5
+                                ? "#ef4444"
+                                : entry.quantity <= 10
+                                ? "#f59e0b"
+                                : "#22c55e"
+                            }
+                          />
+                        ))}
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
                   <div className="text-center py-5 text-success">
-                    <Package
-                      size={48}
-                      className="mb-3"
-                    />
+                    <Package size={48} className="mb-3" />
 
-                    <p className="mb-0">
-                      All items are well stocked!
-                    </p>
+                    <p className="mb-0">All items are well stocked!</p>
                   </div>
                 )}
               </div>
@@ -764,15 +735,9 @@ const Dashboard = () => {
 
           {/* ===== LOW STOCK LIST ===== */}
           <div className="col-lg-6">
-            <div
-              className={`card rounded-4 ${theme.card}`}
-            >
-              <div
-                className={`card-header py-3 ${theme.cardHeader}`}
-              >
-                <h5
-                  className={`fw-bold mb-0 ${theme.text}`}
-                >
+            <div className={`card rounded-4 ${theme.card}`}>
+              <div className={`card-header py-3 ${theme.cardHeader}`}>
+                <h5 className={`fw-bold mb-0 ${theme.text}`}>
                   <Package size={20} className="me-2" />
                   Low Stock List
                 </h5>
@@ -787,43 +752,30 @@ const Dashboard = () => {
               >
                 {lowStockItems.length > 0 ? (
                   <div className="list-group list-group-flush">
-                    {lowStockItems.map(
-                      (item, idx) => (
-                        <div
-                          key={idx}
-                          className={`list-group-item d-flex justify-content-between align-items-center ${theme.card}`}
-                        >
-                          <div>
-                            <div
-                              className={`fw-semibold ${theme.text}`}
-                            >
-                              {item.name}
-                            </div>
-
-                            <small
-                              className={
-                                theme.textMuted
-                              }
-                            >
-                              Rs.{" "}
-                              {Number(
-                                item.price
-                              ).toFixed(2)}
-                            </small>
+                    {lowStockItems.map((item, idx) => (
+                      <div
+                        key={idx}
+                        className={`list-group-item d-flex justify-content-between align-items-center ${theme.card}`}
+                      >
+                        <div>
+                          <div className={`fw-semibold ${theme.text}`}>
+                            {item.name}
                           </div>
 
-                          <span
-                            className={`badge rounded-pill ${
-                              item.qty <= 5
-                                ? "bg-danger"
-                                : "bg-warning text-dark"
-                            }`}
-                          >
-                            {item.qty} left
-                          </span>
+                          <small className={theme.textMuted}>
+                            Rs. {Number(item.price).toFixed(2)}
+                          </small>
                         </div>
-                      )
-                    )}
+
+                        <span
+                          className={`badge rounded-pill ${
+                            item.qty <= 5 ? "bg-danger" : "bg-warning text-dark"
+                          }`}
+                        >
+                          {item.qty} left
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 ) : (
                   <div className="text-center py-4 text-success">
@@ -835,37 +787,211 @@ const Dashboard = () => {
           </div>
         </div>
 
+        {/* ===== TOP SELLING SUMMARY ===== */}
+        <div className="row g-4 mb-4">
+          <h4 className={isDarkMode ? "text-white fw-bold" : "text-dark fw-bold"}><DollarSign size={28} className="text-success" />Top Selling</h4>
+          <div className="col-md-6">
+            <div className={`card rounded-4 p-4 ${theme.statCard}`}>
+              <div className="d-flex align-items-center">
+                <div className="rounded-circle bg-success bg-opacity-10 p-3 me-3">
+                  <TrendingUp size={28} className="text-success" />
+                </div>
+
+                <div>
+                  <p className={theme.textMuted}>Top Selling Item</p>
+
+                  <h4
+                    className="fw-bold mb-0"
+                    style={{
+                      color: isDarkMode ? "#4ade80" : "#16a34a",
+                    }}
+                  >
+                    {highDemandItems[0]?.name || "N/A"}
+                  </h4>
+
+                  <small className={theme.textMuted}>
+                    Sold: {highDemandItems[0]?.quantity || 0}
+                  </small>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="col-md-6">
+            <div className={`card rounded-4 p-4 ${theme.statCard}`}>
+              <div className="d-flex align-items-center">
+                <div className="rounded-circle bg-primary bg-opacity-10 p-3 me-3">
+                  <DollarSign size={28} className="text-primary" />
+                </div>
+
+                <div>
+                  <p className={theme.textMuted}>Highest Revenue Item</p>
+
+                  <h4 className="fw-bold mb-0" style={{ color: "#3b82f6" }}>
+                    {highestRevenueItem?.name || "N/A"}
+                  </h4>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ===== FUTURE STOCK SUGGESTIONS ===== */}
+        <div className={`card rounded-4 mb-4 ${theme.card}`}>
+          <div className={`card-header py-3 ${theme.cardHeader}`}>
+            <h5 className={`fw-bold mb-0 ${theme.text}`}>
+              Suggested Future Stock Items
+            </h5>
+          </div>
+
+          <div className="card-body p-0">
+            <div className="table-responsive">
+              <table className={`table mb-0 ${theme.table}`}>
+                <thead className={theme.tableHead}>
+                  <tr>
+                    <th className="ps-4">Item</th>
+                    <th>Total Sold</th>
+                    <th>Revenue</th>
+                    <th>Recommendation</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {highDemandItems.map((item, idx) => (
+                    <tr key={idx}>
+                      <td className="ps-4 fw-semibold">{item.name}</td>
+
+                      <td>{item.quantity}</td>
+
+                      <td>Rs. {item.revenue.toFixed(2)}</td>
+
+                      <td>
+                        {item.quantity >= 20 ? (
+                          <span className="badge bg-danger">
+                            Add More Stock
+                          </span>
+                        ) : item.quantity >= 10 ? (
+                          <span className="badge bg-warning text-dark">
+                            Medium Demand
+                          </span>
+                        ) : (
+                          <span className="badge bg-success">Stable</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        {/* ===== HIGH DEMAND ITEMS ===== */}
+        <div className="row g-4 mb-4">
+          {/* ===== BAR CHART ===== */}
+          <div className="col-lg-7">
+            <div className={`card rounded-4 ${theme.card}`}>
+              <div className={`card-header py-3 ${theme.cardHeader}`}>
+                <h5 className={`fw-bold mb-0 ${theme.text}`}>
+                  <TrendingUp size={20} className="me-2 text-success" />
+                  Top Selling Items
+                </h5>
+              </div>
+
+              <div className="card-body">
+                <ResponsiveContainer width="100%" height={350}>
+                  <BarChart data={highDemandItems}>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke={isDarkMode ? "#374151" : "#e5e7eb"}
+                    />
+
+                    <XAxis
+                      dataKey="name"
+                      tick={{
+                        fill: isDarkMode ? "#9ca3af" : "#6b7280",
+                        fontSize: 12,
+                      }}
+                    />
+
+                    <YAxis
+                      tick={{
+                        fill: isDarkMode ? "#9ca3af" : "#6b7280",
+                      }}
+                    />
+
+                    <Tooltip />
+
+                    <Legend />
+
+                    <Bar
+                      dataKey="quantity"
+                      fill="#3b82f6"
+                      radius={[6, 6, 0, 0]}
+                      name="Sold Qty"
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+
+          {/* ===== PIE CHART ===== */}
+          <div className="col-lg-5">
+            <div className={`card rounded-4 ${theme.card}`}>
+              <div className={`card-header py-3 ${theme.cardHeader}`}>
+                <h5 className={`fw-bold mb-0 ${theme.text}`}>
+                  <Package size={20} className="me-2" />
+                  Demand Distribution
+                </h5>
+              </div>
+
+              <div className="card-body">
+                <ResponsiveContainer width="100%" height={350}>
+                  <PieChart>
+                    <Pie
+                      data={highDemandItems}
+                      dataKey="quantity"
+                      nameKey="name"
+                      outerRadius={120}
+                      label={({ name, percent }) =>
+                        `${name}: ${(percent * 100).toFixed(0)}%`
+                      }
+                    >
+                      {highDemandItems.map((entry, index) => (
+                        <Cell
+                          key={index}
+                          fill={pieColors[index % pieColors.length]}
+                        />
+                      ))}
+                    </Pie>
+
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+        </div>
         {/* ===== ORDERS SECTION ===== */}
-        <div
-          className={`card rounded-4 ${theme.card}`}
-        >
-          <div
-            className={`card-header py-3 ${theme.cardHeader}`}
-          >
+        <div className={`card rounded-4 ${theme.card}`}>
+          <div className={`card-header py-3 ${theme.cardHeader}`}>
             <div className="d-flex justify-content-between align-items-center flex-wrap gap-3">
-              <h5
-                className={`fw-bold mb-0 ${theme.text}`}
-              >
-                <ShoppingCart
-                  size={20}
-                  className="me-2"
-                />
+              <h5 className={`fw-bold mb-0 ${theme.text}`}>
+                <ShoppingCart size={20} className="me-2" />
                 Orders ({filteredOrders.length})
               </h5>
 
               <div className="d-flex align-items-center gap-2">
-                <p className={`mb-0 ${theme.text}`}>
-                  Search Order
-                </p>
+                <p className={`mb-0 ${theme.text}`}>Search Order</p>
 
                 <input
                   type="text"
                   className={`form-control form-control-sm ${theme.input}`}
                   placeholder="Search orders..."
                   value={searchTerm}
-                  onChange={(e) =>
-                    setSearchTerm(e.target.value)
-                  }
+                  onChange={(e) => setSearchTerm(e.target.value)}
                   style={{ width: "200px" }}
                 />
               </div>
@@ -880,14 +1006,10 @@ const Dashboard = () => {
             }}
           >
             <div className="table-responsive">
-              <table
-                className={`table table-hover mb-0 ${theme.table}`}
-              >
+              <table className={`table table-hover mb-0 ${theme.table}`}>
                 <thead className={theme.tableHead}>
                   <tr>
-                    <th className="ps-4 py-3">
-                      Order ID
-                    </th>
+                    <th className="ps-4 py-3">Order ID</th>
 
                     <th>Cashier</th>
 
@@ -895,32 +1017,22 @@ const Dashboard = () => {
 
                     <th>Total</th>
 
-                    <th className="text-center">
-                      Actions
-                    </th>
+                    <th className="text-center">Actions</th>
 
-                    <th className="text-end pe-4">
-                      Date
-                    </th>
+                    <th className="text-end pe-4">Date</th>
                   </tr>
                 </thead>
 
                 <tbody>
                   {loading ? (
                     <tr>
-                      <td
-                        colSpan="6"
-                        className="text-center py-5"
-                      >
+                      <td colSpan="6" className="text-center py-5">
                         Loading...
                       </td>
                     </tr>
                   ) : filteredOrders.length > 0 ? (
                     filteredOrders.map((o) => (
-                      <tr
-                        key={o.orderId || o.id}
-                        className="align-middle"
-                      >
+                      <tr key={o.orderId || o.id} className="align-middle">
                         <td className="ps-4 fw-semibold">
                           #{o.orderId || o.id}
                         </td>
@@ -929,30 +1041,21 @@ const Dashboard = () => {
                           {o.cashierName || "-"}
                         </td>
 
-                        <td>
-                          {(o.items || []).length}
-                        </td>
+                        <td>{(o.items || []).length}</td>
 
                         <td
                           className="fw-semibold"
                           style={{
-                            color: isDarkMode
-                              ? "#4ade80"
-                              : "#16a34a",
+                            color: isDarkMode ? "#4ade80" : "#16a34a",
                           }}
                         >
-                          Rs.{" "}
-                          {Number(
-                            o.totalAmount || 0
-                          ).toFixed(2)}
+                          Rs. {Number(o.totalAmount || 0).toFixed(2)}
                         </td>
 
                         <td className="text-center">
                           <button
                             className="btn btn-sm btn-outline-primary me-2 rounded-pill px-3"
-                            onClick={() =>
-                              openDetails(o)
-                            }
+                            onClick={() => openDetails(o)}
                           >
                             View
                           </button>
@@ -961,9 +1064,7 @@ const Dashboard = () => {
                             <button
                               className="btn btn-sm btn-outline-danger rounded-pill px-3"
                               onClick={() =>
-                                handleDeleteOrder(
-                                  o.orderId || o.id
-                                )
+                                handleDeleteOrder(o.orderId || o.id)
                               }
                             >
                               Delete
@@ -973,9 +1074,7 @@ const Dashboard = () => {
 
                         <td className="text-end pe-4">
                           {o.createDate
-                            ? new Date(
-                                o.createDate
-                              ).toLocaleDateString()
+                            ? new Date(o.createDate).toLocaleDateString()
                             : "-"}
                         </td>
                       </tr>
@@ -1022,29 +1121,21 @@ const Dashboard = () => {
             {/* ===== HEADER ===== */}
             <div
               className={`p-4 border-bottom ${
-                isDarkMode
-                  ? "border-secondary"
-                  : ""
+                isDarkMode ? "border-secondary" : ""
               }`}
             >
               <div className="d-flex justify-content-between align-items-center">
                 <div>
-                  <h4
-                    className={`fw-bold mb-1 ${theme.text}`}
-                  >
+                  <h4 className={`fw-bold mb-1 ${theme.text}`}>
                     Order Details
                   </h4>
 
                   <span
                     className={`badge ${
-                      isDarkMode
-                        ? "bg-secondary"
-                        : "bg-primary"
+                      isDarkMode ? "bg-secondary" : "bg-primary"
                     }`}
                   >
-                    #
-                    {selectedOrder.orderId ||
-                      selectedOrder.id}
+                    #{selectedOrder.orderId || selectedOrder.id}
                   </span>
                 </div>
 
@@ -1056,34 +1147,25 @@ const Dashboard = () => {
             </div>
 
             {/* ===== BODY ===== */}
-            <div
-              className="p-4 flex-grow-1"
-              style={{ overflowY: "auto" }}
-            >
+            <div className="p-4 flex-grow-1" style={{ overflowY: "auto" }}>
               {/* ===== CUSTOMER ===== */}
               <div className="mb-4">
                 <div className="d-flex align-items-center gap-2 mb-2">
                   <span
                     className={`badge bg-info bg-opacity-20 ${
-                      isDarkMode
-                        ? "text-primary"
-                        : "text-primary"
+                      isDarkMode ? "text-primary" : "text-primary"
                     }`}
                   >
                     Customer
                   </span>
                 </div>
 
-                <div
-                  className={`fw-semibold ${theme.text}`}
-                >
-                  {selectedOrder.customerName ||
-                    "-"}
+                <div className={`fw-semibold ${theme.text}`}>
+                  {selectedOrder.customerName || "-"}
                 </div>
 
                 <small className={theme.textMuted}>
-                  {selectedOrder.phoneNumber ||
-                    "No phone"}
+                  {selectedOrder.phoneNumber || "No phone"}
                 </small>
               </div>
 
@@ -1093,24 +1175,14 @@ const Dashboard = () => {
                   <div className="col-6">
                     <div
                       className={`p-3 rounded-3 ${
-                        isDarkMode
-                          ? "bg-secondary bg-opacity-10"
-                          : "bg-light"
+                        isDarkMode ? "bg-secondary bg-opacity-10" : "bg-light"
                       }`}
                     >
-                      <small
-                        className={theme.textMuted}
-                      >
-                        Created
-                      </small>
+                      <small className={theme.textMuted}>Created</small>
 
-                      <div
-                        className={`fw-semibold ${theme.text}`}
-                      >
+                      <div className={`fw-semibold ${theme.text}`}>
                         {selectedOrder.createDate
-                          ? new Date(
-                              selectedOrder.createDate
-                            ).toLocaleString()
+                          ? new Date(selectedOrder.createDate).toLocaleString()
                           : "-"}
                       </div>
                     </div>
@@ -1119,22 +1191,13 @@ const Dashboard = () => {
                   <div className="col-6">
                     <div
                       className={`p-3 rounded-3 ${
-                        isDarkMode
-                          ? "bg-secondary bg-opacity-10"
-                          : "bg-light"
+                        isDarkMode ? "bg-secondary bg-opacity-10" : "bg-light"
                       }`}
                     >
-                      <small
-                        className={theme.textMuted}
-                      >
-                        Cashier
-                      </small>
+                      <small className={theme.textMuted}>Cashier</small>
 
-                      <div
-                        className={`fw-semibold ${theme.text}`}
-                      >
-                        {selectedOrder.cashierName ||
-                          "-"}
+                      <div className={`fw-semibold ${theme.text}`}>
+                        {selectedOrder.cashierName || "-"}
                       </div>
                     </div>
                   </div>
@@ -1143,25 +1206,13 @@ const Dashboard = () => {
                   <div className="col-6">
                     <div
                       className={`p-3 rounded-3 ${
-                        isDarkMode
-                          ? "bg-secondary bg-opacity-10"
-                          : "bg-light"
+                        isDarkMode ? "bg-secondary bg-opacity-10" : "bg-light"
                       }`}
                     >
-                      <small
-                        className={theme.textMuted}
-                      >
-                        Cash Received
-                      </small>
+                      <small className={theme.textMuted}>Cash Received</small>
 
-                      <div
-                        className={`fw-semibold ${theme.text}`}
-                      >
-                        Rs.{" "}
-                        {Number(
-                          selectedOrder.cashReceived ||
-                            0
-                        ).toFixed(2)}
+                      <div className={`fw-semibold ${theme.text}`}>
+                        Rs. {Number(selectedOrder.cashReceived || 0).toFixed(2)}
                       </div>
                     </div>
                   </div>
@@ -1169,25 +1220,13 @@ const Dashboard = () => {
                   <div className="col-6">
                     <div
                       className={`p-3 rounded-3 ${
-                        isDarkMode
-                          ? "bg-secondary bg-opacity-10"
-                          : "bg-light"
+                        isDarkMode ? "bg-secondary bg-opacity-10" : "bg-light"
                       }`}
                     >
-                      <small
-                        className={theme.textMuted}
-                      >
-                        Change
-                      </small>
+                      <small className={theme.textMuted}>Change</small>
 
-                      <div
-                        className={`fw-semibold ${theme.text}`}
-                      >
-                        Rs.{" "}
-                        {Number(
-                          selectedOrder.changeAmount ||
-                            0
-                        ).toFixed(2)}
+                      <div className={`fw-semibold ${theme.text}`}>
+                        Rs. {Number(selectedOrder.changeAmount || 0).toFixed(2)}
                       </div>
                     </div>
                   </div>
@@ -1196,60 +1235,42 @@ const Dashboard = () => {
 
               {/* ===== ITEMS ===== */}
               <div className="mb-3">
-                <h6
-                  className={`fw-bold mb-3 ${theme.text}`}
-                >
-                  Order Items (
-                  {selectedOrder.items?.length ||
-                    0}
-                  )
+                <h6 className={`fw-bold mb-3 ${theme.text}`}>
+                  Order Items ({selectedOrder.items?.length || 0})
                 </h6>
 
                 <div className="d-flex flex-column gap-2">
-                  {(selectedOrder.items || []).map(
-                    (it, idx) => (
-                      <div
-                        key={idx}
-                        className={`d-flex justify-content-between align-items-center p-3 rounded-3 ${
-                          isDarkMode
-                            ? "bg-secondary bg-opacity-10"
-                            : "bg-light"
-                        }`}
-                      >
-                        <div>
-                          <div
-                            className={`fw-semibold ${theme.text}`}
-                          >
-                            {it.name}
-                          </div>
-
-                          <small
-                            className={
-                              theme.textMuted
-                            }
-                          >
-                            Qty: {it.quantity} x Rs.{" "}
-                            {Number(
-                              it.price || 0
-                            ).toFixed(2)}
-                          </small>
+                  {(selectedOrder.items || []).map((it, idx) => (
+                    <div
+                      key={idx}
+                      className={`d-flex justify-content-between align-items-center p-3 rounded-3 ${
+                        isDarkMode ? "bg-secondary bg-opacity-10" : "bg-light"
+                      }`}
+                    >
+                      <div>
+                        <div className={`fw-semibold ${theme.text}`}>
+                          {it.name}
                         </div>
 
-                        <div
-                          className="fw-bold"
-                          style={{
-                            color: "#0d6efd",
-                          }}
-                        >
-                          Rs.{" "}
-                          {(
-                            Number(it.quantity) *
-                            Number(it.price || 0)
-                          ).toFixed(2)}
-                        </div>
+                        <small className={theme.textMuted}>
+                          Qty: {it.quantity} x Rs.{" "}
+                          {Number(it.price || 0).toFixed(2)}
+                        </small>
                       </div>
-                    )
-                  )}
+
+                      <div
+                        className="fw-bold"
+                        style={{
+                          color: "#0d6efd",
+                        }}
+                      >
+                        Rs.{" "}
+                        {(Number(it.quantity) * Number(it.price || 0)).toFixed(
+                          2
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
@@ -1257,24 +1278,14 @@ const Dashboard = () => {
             {/* ===== FOOTER ===== */}
             <div
               className={`p-4 border-top d-flex justify-content-between align-items-center ${
-                isDarkMode
-                  ? "border-secondary"
-                  : ""
+                isDarkMode ? "border-secondary" : ""
               }`}
             >
               <div>
-                <small className={theme.textMuted}>
-                  Total Amount
-                </small>
+                <small className={theme.textMuted}>Total Amount</small>
 
-                <div
-                  className="fw-bold fs-4"
-                  style={{ color: "#3b82f6" }}
-                >
-                  Rs.{" "}
-                  {Number(
-                    selectedOrder.totalAmount || 0
-                  ).toFixed(2)}
+                <div className="fw-bold fs-4" style={{ color: "#3b82f6" }}>
+                  Rs. {Number(selectedOrder.totalAmount || 0).toFixed(2)}
                 </div>
               </div>
 
