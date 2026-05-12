@@ -7,6 +7,8 @@ import ItemList from "../../components/ItemList/ItemList"
 import { useTheme } from "../../context/ThemeContext"
 import CheckoutModal from "../../components/CheckoutModal/CheckoutModal"
 import { addOrder } from "../../service/OrderService"
+import { jsPDF } from "jspdf"
+import { Printer, Download } from "lucide-react"
 
 const Explore = () => {
 
@@ -22,6 +24,9 @@ const Explore = () => {
     name: "",
     phone: ""
   })
+
+  const [lastOrder, setLastOrder] = useState(null)
+  const [showReceipt, setShowReceipt] = useState(false)
 
   // ADD TO CART
   const addToCart = (item) => {
@@ -68,59 +73,150 @@ const Explore = () => {
 
   const total = cart.reduce((sum, it) => sum + it.qty * it.price, 0)
 
-// ...existing code...
-const processOrder = async () => {
+  // Generate PDF Receipt
+  const generateReceipt = (orderData) => {
+    const doc = new jsPDF()
+    const pageWidth = doc.internal.pageSize.getWidth()
 
-  try {
+    // Header
+    doc.setFontSize(22)
+    doc.setFont("helvetica", "bold")
+    doc.text("POS RECEIPT", pageWidth / 2, 20, { align: "center" })
 
-    const cashierName = localStorage.getItem("username") || "" // <-- read username
+    doc.setFontSize(10)
+    doc.setFont("helvetica", "normal")
+    doc.text("Your Store Name", pageWidth / 2, 28, { align: "center" })
+    doc.text("123 Main Street, City", pageWidth / 2, 33, { align: "center" })
+    doc.text("Tel: 077-1234567", pageWidth / 2, 38, { align: "center" })
 
-    const payload = {
-      customerName: customer.name,
-      phoneNumber: customer.phone,
+    // Divider
+    doc.setLineWidth(0.5)
+    doc.line(10, 42, pageWidth - 10, 42)
 
-      cartItems: cart.map(item => ({
-        itemId: item.itemId,
-        name: item.name,
-        price: item.price,
-        quantity: item.qty
-      })),
+    // Order Info
+    doc.setFontSize(11)
+    doc.setFont("helvetica", "bold")
+    doc.text(`Order #: ${orderData.orderId}`, 10, 50)
+    doc.text(`Date: ${new Date(orderData.createDate).toLocaleString()}`, 10, 57)
+    doc.text(`Cashier: ${orderData.cashierName}`, 10, 64)
 
-      totalAmount: total,
-      // match server field name (it's "cashReceivedived" in OrderRequest)
-      cashReceivedived: cash,
-      changeAmount: cash - total,
-      cashierName
-    }
+    doc.setFont("helvetica", "normal")
+    doc.text(`Customer: ${orderData.customerName || "Walk-in"}`, 10, 71)
+    doc.text(`Phone: ${orderData.phoneNumber || "-"}`, 10, 78)
 
-    const response = await addOrder(payload)
+    // Divider
+    doc.line(10, 82, pageWidth - 10, 82)
 
-    console.log(response.data)
+    // Items Header
+    doc.setFont("helvetica", "bold")
+    doc.setFontSize(10)
+    doc.text("Item", 10, 89)
+    doc.text("Qty", 110, 89)
+    doc.text("Price", 135, 89)
+    doc.text("Total", 165, 89)
 
-    alert("Order Placed Successfully!")
+    doc.line(10, 92, pageWidth - 10, 92)
 
-    setCart([])
-    setCash(0)
-    setShowCheckout(false)
-    setCustomer({
-      name: "",
-      phone: ""
+    // Items
+    doc.setFont("helvetica", "normal")
+    let y = 99
+    orderData.items.forEach((item, index) => {
+      const itemTotal = (Number(item.price) * Number(item.quantity)).toFixed(2)
+      doc.text(item.name?.substring(0, 30) || "", 10, y)
+      doc.text(String(item.quantity), 110, y)
+      doc.text(`Rs. ${Number(item.price).toFixed(2)}`, 135, y)
+      doc.text(`Rs. ${itemTotal}`, 165, y)
+      y += 7
     })
-    setItemRefreshKey(prev => prev + 1)
 
-  } catch (error) {
+    // Divider
+    doc.line(10, y + 2, pageWidth - 10, y + 2)
 
-    // show full server response to diagnose 500s
-    console.error("Order Error:", error)
-    if (error.response) {
-      console.error("Server response:", error.response.status, error.response.data)
-      alert(`Failed to place order: ${error.response.status} - ${JSON.stringify(error.response.data)}`)
-    } else {
-      alert("Failed to place order")
+    // Totals
+    y += 12
+    doc.setFont("helvetica", "bold")
+    doc.setFontSize(12)
+    doc.text("Subtotal:", 120, y)
+    doc.text(`Rs. ${Number(orderData.totalAmount).toFixed(2)}`, 165, y)
+
+    y += 8
+    doc.setFontSize(10)
+    doc.setFont("helvetica", "normal")
+    doc.text("Cash Received:", 120, y)
+    doc.text(`Rs. ${Number(orderData.cashReceivedived).toFixed(2)}`, 165, y)
+
+    y += 7
+    doc.text("Change:", 120, y)
+    doc.text(`Rs. ${Number(orderData.changeAmount).toFixed(2)}`, 165, y)
+
+    // Footer
+    y += 15
+    doc.setFontSize(10)
+    doc.setFont("helvetica", "italic")
+    doc.text("Thank you for your purchase!", pageWidth / 2, y, { align: "center" })
+    doc.text("Please come again!", pageWidth / 2, y + 6, { align: "center" })
+
+    // Save
+    doc.save(`Receipt_${orderData.orderId}.pdf`)
+  }
+
+  const processOrder = async () => {
+
+    try {
+
+      const cashierName = localStorage.getItem("username") || ""
+
+      const payload = {
+        customerName: customer.name,
+        phoneNumber: customer.phone,
+
+        cartItems: cart.map(item => ({
+          itemId: item.itemId,
+          name: item.name,
+          price: item.price,
+          quantity: item.qty
+        })),
+
+        totalAmount: total,
+        cashReceivedived: cash,
+        changeAmount: cash - total,
+        cashierName
+      }
+
+      const response = await addOrder(payload)
+
+      const orderData = {
+        ...response.data,
+        items: cart.map(item => ({
+          name: item.name,
+          price: item.price,
+          quantity: item.qty
+        }))
+      }
+
+      setLastOrder(orderData)
+      setShowReceipt(true)
+
+      setCart([])
+      setCash(0)
+      setShowCheckout(false)
+      setCustomer({
+        name: "",
+        phone: ""
+      })
+      setItemRefreshKey(prev => prev + 1)
+
+    } catch (error) {
+
+      console.error("Order Error:", error)
+      if (error.response) {
+        console.error("Server response:", error.response.status, error.response.data)
+        alert(`Failed to place order: ${error.response.status} - ${JSON.stringify(error.response.data)}`)
+      } else {
+        alert("Failed to place order")
+      }
     }
   }
-}
-// ...existing code...
 
   const theme = {
     container: isDarkMode ? "bg-dark min-vh-100" : "bg-light min-vh-100",
@@ -228,6 +324,70 @@ const processOrder = async () => {
         total={total}
         processOrder={processOrder}
       />
+
+      {/* Receipt Modal */}
+      {showReceipt && lastOrder && (
+        <div className="position-fixed top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center" style={{ zIndex: 2000, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(5px)" }}>
+          <div className={`card rounded-4 ${isDarkMode ? "bg-dark border-secondary text-white" : "bg-white border-0 shadow-lg"}`} style={{ width: "90%", maxWidth: "450px" }}>
+            <div className={`p-4 border-bottom ${isDarkMode ? "border-secondary" : ""}`}>
+              <div className="d-flex justify-content-between align-items-center">
+                <h4 className={`fw-bold mb-0 ${isDarkMode ? "text-white" : "text-dark"}`}>
+                  <Printer size={24} className="me-2" />
+                  Order Complete!
+                </h4>
+                <button className="btn btn-sm btn-close" onClick={() => setShowReceipt(false)}></button>
+              </div>
+            </div>
+
+            <div className="p-4">
+              <div className={`text-center mb-4 p-4 rounded-4 ${isDarkMode ? "bg-secondary bg-opacity-20" : "bg-light"}`}>
+                <h2 className="fw-bold text-success mb-1">Thank You!</h2>
+                <p className={`mb-0 ${isDarkMode ? "text-white-50" : "text-muted"}`}>Order #{lastOrder.orderId}</p>
+              </div>
+
+              <div className="mb-3">
+                <div className="d-flex justify-content-between mb-2">
+                  <span className={isDarkMode ? "text-white-50" : "text-muted"}>Customer</span>
+                  <span className="fw-semibold">{lastOrder.customerName || "Walk-in"}</span>
+                </div>
+                <div className="d-flex justify-content-between mb-2">
+                  <span className={isDarkMode ? "text-white-50" : "text-muted"}>Items</span>
+                  <span className="fw-semibold">{lastOrder.items?.length || 0}</span>
+                </div>
+                <div className="d-flex justify-content-between mb-2">
+                  <span className={isDarkMode ? "text-white-50" : "text-muted"}>Cash</span>
+                  <span className="fw-semibold">${Number(lastOrder.cashReceivedived).toFixed(2)}</span>
+                </div>
+                <div className="d-flex justify-content-between">
+                  <span className={isDarkMode ? "text-white-50" : "text-muted"}>Change</span>
+                  <span className="fw-semibold">${Number(lastOrder.changeAmount).toFixed(2)}</span>
+                </div>
+              </div>
+
+              <div className={`p-3 rounded-4 text-center mb-4 ${isDarkMode ? "bg-primary bg-opacity-20" : "bg-primary text-white"}`}>
+                <small>Total Amount</small>
+                <h2 className="fw-bold mb-0">Rs. {Number(lastOrder.totalAmount).toFixed(2)}</h2>
+              </div>
+
+              <div className="d-flex gap-2">
+                <button
+                  className="btn btn-primary flex-grow-1 rounded-pill py-2"
+                  onClick={() => generateReceipt(lastOrder)}
+                >
+                  <Download size={18} className="me-2" />
+                  Download PDF
+                </button>
+                <button
+                  className="btn btn-secondary rounded-pill px-4"
+                  onClick={() => setShowReceipt(false)}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
