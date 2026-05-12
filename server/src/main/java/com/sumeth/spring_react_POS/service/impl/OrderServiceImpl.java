@@ -7,10 +7,12 @@ import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 
+import com.sumeth.spring_react_POS.entity.ItemEntity;
 import com.sumeth.spring_react_POS.entity.OrderEntity;
 import com.sumeth.spring_react_POS.entity.OrderItemEntity;
 import com.sumeth.spring_react_POS.io.OrderRequest;
 import com.sumeth.spring_react_POS.io.OrderResponce;
+import com.sumeth.spring_react_POS.repository.ItemRepository;
 import com.sumeth.spring_react_POS.repository.OrderEntityRepository;
 import com.sumeth.spring_react_POS.service.OrderService;
 
@@ -21,6 +23,7 @@ import lombok.RequiredArgsConstructor;
 public class OrderServiceImpl implements OrderService {
 
     private final OrderEntityRepository orderEntityRepository;
+    private final ItemRepository itemRepository;
 
     @Override
     public OrderResponce createOrder(OrderRequest request) {
@@ -30,7 +33,14 @@ public class OrderServiceImpl implements OrderService {
                 .map(this::convertToOrderItemEntity)
                 .collect(Collectors.toList());
 
-        // newOrder.getItems().clear();
+        // Reduce item quantity from inventory
+        for (OrderRequest.OrderItemRequest cartItem : request.getCartItems()) {
+            ItemEntity item = itemRepository.findByItemId(cartItem.getItemId())
+                    .orElseThrow(() -> new RuntimeException("Item not found: " + cartItem.getItemId()));
+            item.setQty(item.getQty() - cartItem.getQuantity());
+            itemRepository.save(item);
+        }
+
         newOrder.getItems().addAll(items);
 
         OrderEntity saved = orderEntityRepository.save(newOrder);

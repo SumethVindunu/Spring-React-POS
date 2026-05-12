@@ -3,137 +3,153 @@ import axios from "axios";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { useTheme } from "../../context/ThemeContext";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { Package, DollarSign, AlertTriangle, ShoppingCart, TrendingUp, Calendar } from "lucide-react";
 
 const ORDERS_API = "http://localhost:8080/api/v1.0/admin/orders";
+const ITEMS_API = "http://localhost:8080/api/v1.0/admin/items";
 
 const Dashboard = () => {
-const { isDarkMode } = useTheme();
-const storedRole = localStorage.getItem("role") || "";
-const isAdmin = storedRole === "ROLE_ADMIN" || storedRole === "ADMIN";
+  const { isDarkMode } = useTheme();
+  const storedRole = localStorage.getItem("role") || "";
+  const isAdmin = storedRole === "ROLE_ADMIN" || storedRole === "ADMIN";
 
-
-  // ===== MODERN THEME =====
+  // ===== THEME =====
   const theme = {
-    container: isDarkMode
-      ? "bg-dark text-light min-vh-100"
-      : "bg-light text-dark min-vh-100",
-
-    card: isDarkMode
-      ? "bg-secondary bg-opacity-10 border border-secondary text-white shadow-lg"
-      : "bg-white border-0 shadow-sm",
-
-    cardHeader: isDarkMode
-      ? "bg-transparent border-bottom border-secondary"
-      : "bg-white border-0",
-
-    input: isDarkMode
-      ? "bg-dark text-white border-secondary"
-      : "bg-light border-0 shadow-sm",
-
-    label: isDarkMode ? "text-light" : "text-dark",
-
+    container: isDarkMode ? "bg-dark min-vh-100" : "bg-light min-vh-100",
+    card: isDarkMode ? "bg-secondary bg-opacity-10 border border-secondary text-white" : "bg-white border-0 shadow-sm",
+    cardHeader: isDarkMode ? "border-bottom border-secondary" : "border-bottom",
+    input: isDarkMode ? "bg-dark text-white border-secondary" : "bg-light border",
+    label: isDarkMode ? "text-white-50" : "text-muted",
     textMuted: isDarkMode ? "text-white-50" : "text-muted",
-
-    table: isDarkMode
-      ? "table table-dark table-hover align-middle"
-      : "table table-hover align-middle",
-
-    tableHead: isDarkMode
-      ? "text-white-50 border-bottom border-secondary"
-      : "bg-light text-secondary",
-
-    statCard: isDarkMode
-      ? "bg-dark border border-secondary text-white shadow-sm"
-      : "bg-light border-0 shadow-sm",
-
-    modal: isDarkMode
-      ? "bg-dark border border-secondary text-white"
-      : "bg-white border-0 shadow-lg",
+    table: isDarkMode ? "table table-dark table-hover align-middle" : "table table-hover align-middle",
+    tableHead: isDarkMode ? "bg-dark text-white-50" : "bg-light text-secondary",
+    statCard: isDarkMode ? "bg-dark border border-secondary" : "bg-white border-0 shadow-sm",
+    chart: isDarkMode ? "#1f2937" : "#ffffff",
+    text: isDarkMode ? "text-white" : "text-dark",
+    modalBody: isDarkMode ? "bg-dark text-white" : "bg-white text-dark",
+    modalContent: isDarkMode ? "bg-dark border-secondary" : "bg-white border-0",
   };
 
+  // ===== STATE =====
   const [orders, setOrders] = useState([]);
-  const [filtered, setFiltered] = useState([]);
+  const [items, setItems] = useState([]);
+  const [filteredOrders, setFilteredOrders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
 
-  // ===== LOAD ORDERS =====
-  const loadOrders = async () => {
+  // ===== LOAD DATA =====
+  const loadData = async () => {
     setLoading(true);
-
     try {
-      const res = await axios.get(ORDERS_API, { timeout: 10000 });
-
-      const data = res.data || [];
-
-      setOrders(Array.isArray(data) ? data : []);
-      setFiltered(Array.isArray(data) ? data : []);
+      const [ordersRes, itemsRes] = await Promise.all([
+        axios.get(ORDERS_API, { timeout: 10000 }),
+        axios.get(ITEMS_API, { timeout: 10000 }),
+      ]);
+      setOrders(ordersRes.data || []);
+      setFilteredOrders(ordersRes.data || []);
+      setItems(itemsRes.data || []);
     } catch (err) {
-      console.error("Failed to load orders", err);
-      toast.error("Failed to load orders");
+      console.error("Failed to load data", err);
+      toast.error("Failed to load data");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadOrders();
+    loadData();
   }, []);
+
+  // ===== LOW STOCK ITEMS =====
+  const lowStockItems = useMemo(() => {
+    return items.filter(item => item.qty <= 10).sort((a, b) => a.qty - b.qty).slice(0, 10);
+  }, [items]);
+
+  const chartData = useMemo(() => {
+    return lowStockItems.map(item => ({
+      name: item.name?.length > 12 ? item.name.substring(0, 12) + "..." : item.name,
+      fullName: item.name,
+      quantity: item.qty,
+      price: item.price,
+    }));
+  }, [lowStockItems]);
+
+  // ===== DAILY ORDERS CHART DATA (based on filtered) =====
+  const dailyOrdersData = useMemo(() => {
+    const dailyMap = {};
+    filteredOrders.forEach(order => {
+      if (order.createDate) {
+        const date = new Date(order.createDate).toLocaleDateString();
+        if (!dailyMap[date]) {
+          dailyMap[date] = { date, orders: 0, revenue: 0 };
+        }
+        dailyMap[date].orders += 1;
+        dailyMap[date].revenue += Number(order.totalAmount) || 0;
+      }
+    });
+    return Object.values(dailyMap).sort((a, b) => new Date(a.date) - new Date(b.date));
+  }, [filteredOrders]);
+
+  // ===== DATE FILTER =====
+  useEffect(() => {
+    let result = orders;
+
+    if (dateFrom) {
+      result = result.filter(o => new Date(o.createDate) >= new Date(dateFrom));
+    }
+    if (dateTo) {
+      result = result.filter(o => new Date(o.createDate) <= new Date(dateTo));
+    }
+    if (searchTerm) {
+      const low = searchTerm.toLowerCase();
+      result = result.filter(o =>
+        String(o.orderId || "").toLowerCase().includes(low) ||
+        String(o.cashierName || "").toLowerCase().includes(low) ||
+        String(o.phoneNumber || "").toLowerCase().includes(low)
+      );
+    }
+
+    setFilteredOrders(result);
+  }, [orders, dateFrom, dateTo, searchTerm]);
+
+  // ===== CLEAR FILTERS =====
+  const clearFilters = () => {
+    setDateFrom("");
+    setDateTo("");
+    setSearchTerm("");
+  };
 
   // ===== TOTALS =====
   const totals = useMemo(() => {
-    const totalOrders = orders.length;
+    const totalOrders = filteredOrders.length;
+    const totalRevenue = filteredOrders.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
+    const lowStockCount = items.filter(item => item.qty <= 10).length;
+    return { totalOrders, totalRevenue, lowStockCount };
+  }, [filteredOrders, items]);
 
-    const totalRevenue = orders.reduce((sum, o) => {
-      const val =
-        Number(o.totalAmount || o.total || o.amount || 0) || 0;
-
-      return sum + val;
-    }, 0);
-
-    // no status column -> pending set to 0
-    const pending = 0;
-
-    return {
-      totalOrders,
-      totalRevenue,
-      pending,
-    };
-  }, [orders]);
-
-  // ===== SEARCH =====
-  const handleSearch = (e) => {
-    const q = e.target.value || "";
-
-    setSearchTerm(q);
-
-    if (!q) {
-      setFiltered(orders);
+  // ===== DELETE ORDER =====
+  const handleDeleteOrder = async (orderId) => {
+    if (!isAdmin) {
+      toast.error("Access denied - admin only");
       return;
     }
-
-    const low = q.toLowerCase();
-
-    const result = orders.filter((o) => {
-      return (
-        String(o.orderId || o.id || "")
-          .toLowerCase()
-          .includes(low) ||
-        String(o.customerName || o.customer?.name || "")
-          .toLowerCase()
-          .includes(low) ||
-        String(o.phoneNumber || o.customer?.phone || "")
-          .toLowerCase()
-          .includes(low)
-      );
-    });
-
-    setFiltered(result);
+    if (!window.confirm("Delete this order?")) return;
+    try {
+      await axios.delete(`${ORDERS_API}/${orderId}`);
+      toast.success("Order deleted");
+      closeDetails();
+      loadData();
+    } catch (err) {
+      console.error("Delete failed", err);
+      toast.error("Failed to delete order");
+    }
   };
 
-  // ===== DETAILS =====
   const openDetails = (order) => {
     setSelectedOrder(order);
     setShowDetails(true);
@@ -144,214 +160,338 @@ const isAdmin = storedRole === "ROLE_ADMIN" || storedRole === "ADMIN";
     setShowDetails(false);
   };
 
-  // ===== DELETE =====
-  const handleDeleteOrder = async (orderId) => {
-    if (!isAdmin) {
-      toast.error("Access denied - admin only");
-      return;
-    }
-  
-    if (!window.confirm("Delete this order?")) return;
-  
-    try {
-      await axios.delete(`${ORDERS_API}/${orderId}`);
-  
-      toast.success("Order deleted successfully");
-  
-      closeDetails();
-      loadOrders();
-    } catch (err) {
-      console.error("Delete failed", err);
-      toast.error("Failed to delete order");
-    }
-  };
-
+  // ===== RENDER =====
   return (
     <>
-      {/* ===== TOAST ===== */}
       <ToastContainer
         position="top-right"
         autoClose={3000}
         theme={isDarkMode ? "dark" : "light"}
       />
 
-      {/* ===== MAIN ===== */}
       <div className={`container-fluid p-4 ${theme.container}`}>
-        <div className="row g-4">
-          {/* ===== LEFT PANEL ===== */}
-          <div className="col-lg-4 col-md-5">
+        {/* ===== HEADER ===== */}
+        <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+          <div>
+            <h2 className={`fw-bold ${theme.text}`}>Dashboard</h2>
+            <p className={theme.textMuted}>
+              Overview of your store performance
+            </p>
+          </div>
+          <div className="d-flex gap-2 align-items-center flex-wrap">
             <div
-              className={`card rounded-4 sticky-top ${theme.card}`}
-              style={{ top: "20px", zIndex: 1 }}
+              className={`d-flex align-items-center gap-2 p-2 rounded-3 ${
+                isDarkMode ? "bg-secondary bg-opacity-10" : "bg-white shadow-sm"
+              }`}
             >
-              <div className={`card-header pt-4 px-4 ${theme.cardHeader}`}>
-                <h4 className="fw-bold text-primary mb-1">Orders Summary</h4>
+              <Calendar size={16} className={theme.textMuted} />
+              <input
+                type="date"
+                className={`form-control form-control-sm border-0 ${theme.input}`}
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                style={{ width: "130px", background: "transparent" }}
+              />
+              <span className={theme.textMuted}>-</span>
+              <input
+                type="date"
+                className={`form-control form-control-sm border-0 ${theme.input}`}
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                style={{ width: "130px", background: "transparent" }}
+              />
+              <button
+                className="btn btn-sm btn-outline-secondary rounded-pill px-2"
+                onClick={clearFilters}
+                title="Clear filters"
+              >
+                <small>Clear</small>
+              </button>
+            </div>
+            <button
+              className="btn btn-primary rounded-pill px-4"
+              onClick={loadData}
+            >
+              <TrendingUp size={18} className="me-1" />
+              Refresh
+            </button>
+          </div>
+        </div>
 
-                <p className={`small mb-0 ${theme.textMuted}`}>
-                  Overview of recent orders
-                </p>
-              </div>
-
-              <div className="card-body px-4 pb-4">
-                {/* SEARCH */}
-                <div className="mb-4">
-                  <label className={`form-label fw-semibold ${theme.label}`}>
-                    Search Orders
-                  </label>
-
-                  <input
-                    type="text"
-                    className={`form-control form-control-lg ${theme.input}`}
-                    placeholder="Search by order id..."
-                    value={searchTerm}
-                    onChange={handleSearch}
-                  />
+        {/* ===== STAT CARDS ===== */}
+        <div className="row g-4 mb-4">
+          <div className="col-md-4">
+            <div className={`card rounded-4 p-4 ${theme.statCard}`}>
+              <div className="d-flex align-items-center">
+                <div className="rounded-circle bg-primary bg-opacity-10 p-3 me-3">
+                  <ShoppingCart size={28} className="text-primary" />
                 </div>
-
-                {/* STATS */}
-                <div className="row g-3">
-                  <div className="col-6">
-                    <div
-                      className={`p-4 rounded-4 text-center ${theme.statCard}`}
-                    >
-                      <h6 className={theme.textMuted}>Total Orders</h6>
-
-                      <h2 className="fw-bold text-primary">
-                        {totals.totalOrders}
-                      </h2>
-                    </div>
-                  </div>
-
-                  <div className="col-6">
-                    <div
-                      className={`p-4 rounded-4 text-center ${theme.statCard}`}
-                    >
-                      <h6 className={theme.textMuted}>Pending</h6>
-
-                      <h2 className="fw-bold text-warning">{totals.pending}</h2>
-                    </div>
-                  </div>
-
-                  <div className="col-12">
-                    <div
-                      className={`p-4 rounded-4 text-center ${theme.statCard}`}
-                    >
-                      <h6 className={theme.textMuted}>Total Revenue</h6>
-
-                      <h2 className="fw-bold text-success">
-                        {totals.totalRevenue.toLocaleString(undefined, {
-                          style: "currency",
-                          currency: "USD",
-                        })}
-                      </h2>
-                    </div>
-                  </div>
+                <div>
+                  <p className={theme.textMuted}>Total Orders</p>
+                  <h2 className="fw-bold mb-0" style={{ color: "#3b82f6" }}>
+                    {totals.totalOrders}
+                  </h2>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* ===== RIGHT PANEL ===== */}
-          <div className="col-lg-8 col-md-7">
-            <div className={`card rounded-4 ${theme.card}`}>
-              <div
-                className={`card-header pt-4 px-4 d-flex justify-content-between align-items-center ${theme.cardHeader}`}
-              >
+          <div className="col-md-4">
+            <div className={`card rounded-4 p-4 ${theme.statCard}`}>
+              <div className="d-flex align-items-center">
+                <div className="rounded-circle bg-success bg-opacity-10 p-3 me-3">
+                  <DollarSign size={28} className="text-success" />
+                </div>
                 <div>
-                  <h4 className="fw-bold mb-0">Recent Orders</h4>
-
-                  <small className={theme.textMuted}>
-                    Updated: {new Date().toLocaleString()}
-                  </small>
+                  <p className={theme.textMuted}>Total Revenue</p>
+                  <h2
+                    className="fw-bold mb-0"
+                    style={{ color: isDarkMode ? "#4ade80" : "#16a34a" }}
+                  >
+                    Rs.{" "}
+                    {totals.totalRevenue.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                    })}
+                  </h2>
                 </div>
               </div>
+            </div>
+          </div>
 
-              <div className="card-body p-0">
-                <div className="table-responsive">
-                  <table className={theme.table}>
-                    <thead className={theme.tableHead}>
-                      <tr>
-                        <th className="ps-4 py-3">Order ID</th>
-                        <th>Customer</th>
-                        <th>Items</th>
-                        <th>Total</th>
-                        <th className="text-center">Actions</th>
-                        <th className="text-end pe-4">Date</th>
-                      </tr>
-                    </thead>
+          <div className="col-md-4">
+            <div className={`card rounded-4 p-4 ${theme.statCard}`}>
+              <div className="d-flex align-items-center">
+                <div className="rounded-circle bg-warning bg-opacity-10 p-3 me-3">
+                  <AlertTriangle size={28} className="text-warning" />
+                </div>
+                <div>
+                  <p className={theme.textMuted}>Low Stock Items</p>
+                  <h2 className="fw-bold mb-0 text-warning">
+                    {totals.lowStockCount}
+                  </h2>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
 
-                    <tbody>
-                      {loading ? (
-                        <tr>
-                          <td colSpan="6" className="text-center py-5">
-                            Loading orders...
-                          </td>
-                        </tr>
-                      ) : filtered.length > 0 ? (
-                        filtered.map((o) => (
-                          <tr key={o.orderId || o.id} className="align-middle">
-                            <td className="ps-4 fw-semibold">
-                              #{o.orderId || o.id}
-                            </td>
+        {/* ===== LOW STOCK CHART ===== */}
+        <div className="row g-4 mb-4">
+          <div className="col-lg-6">
+            <div className={`card rounded-4 ${theme.card}`}>
+              <div className={`card-header py-3 ${theme.cardHeader}`}>
+                <h5 className={`fw-bold mb-0 ${theme.text}`}>
+                  <AlertTriangle size={20} className="me-2 text-warning" />
+                  Low Stock Items (Qty ≤ 10)
+                </h5>
+              </div>
+              <div className="card-body">
+                {chartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart
+                      data={chartData}
+                      margin={{ top: 20, right: 30, left: 0, bottom: 5 }}
+                    >
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        stroke={isDarkMode ? "#374151" : "#e5e7eb"}
+                      />
+                      <XAxis
+                        dataKey="name"
+                        tick={{
+                          fill: isDarkMode ? "#9ca3af" : "#6b7280",
+                          fontSize: 12,
+                        }}
+                      />
+                      <YAxis
+                        tick={{ fill: isDarkMode ? "#9ca3af" : "#6b7280" }}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: isDarkMode ? "#1f2937" : "#fff",
+                          border: `1px solid ${
+                            isDarkMode ? "#374151" : "#e5e7eb"
+                          }`,
+                          borderRadius: "8px",
+                        }}
+                        labelStyle={{ color: isDarkMode ? "#fff" : "#000" }}
+                      />
+                      <Bar
+                        dataKey="quantity"
+                        name="Quantity"
+                        radius={[4, 4, 0, 0]}
+                      >
+                        {chartData.map((entry, index) => (
+                          <Cell
+                            key={`cell-${index}`}
+                            fill={
+                              entry.quantity <= 5
+                                ? "#ef4444"
+                                : entry.quantity <= 10
+                                ? "#f59e0b"
+                                : "#22c55e"
+                            }
+                          />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="text-center py-5 text-success">
+                    <Package size={48} className="mb-3" />
+                    <p className="mb-0">All items are well stocked!</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
 
-                            <td className={theme.textMuted}>
-                              {o.customerName || o.customer?.name || "-"}
-                            </td>
+          <div className="col-lg-6">
+            <div className={`card rounded-4 ${theme.card}`}>
+              <div className={`card-header py-3 ${theme.cardHeader}`}>
+                <h5 className={`fw-bold mb-0 ${theme.text}`}>
+                  <Package size={20} className="me-2" />
+                  Low Stock List
+                </h5>
+              </div>
+              <div
+                className="card-body p-0"
+                style={{ maxHeight: "320px", overflowY: "auto" }}
+              >
+                {lowStockItems.length > 0 ? (
+                  <div className="list-group list-group-flush">
+                    {lowStockItems.map((item, idx) => (
+                      <div
+                        key={idx}
+                        className={`list-group-item d-flex justify-content-between align-items-center ${theme.card}`}
+                      >
+                        <div>
+                          <div className={`fw-semibold ${theme.text}`}>
+                            {item.name}
+                          </div>
+                          <small className={theme.textMuted}>
+                            Rs. {Number(item.price).toFixed(2)}
+                          </small>
+                        </div>
+                        <span
+                          className={`badge rounded-pill ${
+                            item.qty <= 5 ? "bg-danger" : "bg-warning text-dark"
+                          }`}
+                        >
+                          {item.qty} left
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-4 text-success">
+                    No low stock items
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
 
-                            <td>{(o.items || o.orderItems || []).length}</td>
+        {/* ===== ORDERS SECTION ===== */}
+        <div className={`card rounded-4 ${theme.card}`}>
+          <div className={`card-header py-3 ${theme.cardHeader}`}>
+            <div className="d-flex justify-content-between align-items-center flex-wrap gap-3">
+              <h5 className={`fw-bold mb-0 ${theme.text}`}>
+                <ShoppingCart size={20} className="me-2" />
+                Orders ({filteredOrders.length})
+              </h5>
+              <div className="d-flex align-items-center gap-2">
+                <p className={`mb-0 ${theme.text}`}>Search Order</p>
 
-                            <td className="fw-semibold text-success">
-                              {Number(
-                                o.totalAmount || o.total || o.amount || 0
-                              ).toLocaleString(undefined, {
-                                style: "currency",
-                                currency: "USD",
-                              })}
-                            </td>
+                <input
+                  type="text"
+                  className={`form-control form-control-sm ${theme.input}`}
+                  placeholder="Search orders..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  style={{ width: "200px" }}
+                />
+              </div>
+            </div>
+          </div>
 
-                            <td className="text-center">
-                              <button
-                                className="btn btn-sm btn-outline-primary me-2 rounded-pill px-3"
-                                onClick={() => openDetails(o)}
-                              >
-                                View
-                              </button>
-
-                              {isAdmin && (
-                                <button
-                                  className="btn btn-sm btn-outline-danger rounded-pill px-3"
-                                  onClick={() =>
-                                    handleDeleteOrder(o.orderId || o.id)
-                                  }
-                                >
-                                  Delete
-                                </button>
-                              )}
-                            </td>
-
-                            <td className="text-end pe-4">
-                              {o.createDate || o.createdAt || o.date
-                                ? new Date(
-                                    o.createDate || o.createdAt || o.date
-                                  ).toLocaleDateString()
-                                : "-"}
-                            </td>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td
-                            colSpan="6"
-                            className={`text-center py-5 ${theme.textMuted}`}
+          <div
+            className="card-body p-0"
+            style={{ maxHeight: "400px", overflowY: "auto" }}
+          >
+            <div className="table-responsive">
+              <table className={`table table-hover mb-0 ${theme.table}`}>
+                <thead className={theme.tableHead}>
+                  <tr>
+                    <th className="ps-4 py-3">Order ID</th>
+                    <th>Cashier</th>
+                    <th>Items</th>
+                    <th>Total</th>
+                    <th className="text-center">Actions</th>
+                    <th className="text-end pe-4">Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <tr>
+                      <td colSpan="6" className="text-center py-5">
+                        Loading...
+                      </td>
+                    </tr>
+                  ) : filteredOrders.length > 0 ? (
+                    filteredOrders.map((o) => (
+                      <tr key={o.orderId || o.id} className="align-middle">
+                        <td className="ps-4 fw-semibold">
+                          #{o.orderId || o.id}
+                        </td>
+                        <td className={theme.textMuted}>
+                          {o.cashierName || "-"}
+                        </td>
+                        <td>{(o.items || []).length}</td>
+                        <td
+                          className="fw-semibold"
+                          style={{ color: isDarkMode ? "#4ade80" : "#16a34a" }}
+                        >
+                          Rs. {Number(o.totalAmount || 0).toFixed(2)}
+                        </td>
+                        <td className="text-center">
+                          <button
+                            className="btn btn-sm btn-outline-primary me-2 rounded-pill px-3"
+                            onClick={() => openDetails(o)}
                           >
-                            No orders found
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+                            View
+                          </button>
+                          {isAdmin && (
+                            <button
+                              className="btn btn-sm btn-outline-danger rounded-pill px-3"
+                              onClick={() =>
+                                handleDeleteOrder(o.orderId || o.id)
+                              }
+                            >
+                              Delete
+                            </button>
+                          )}
+                        </td>
+                        <td className="text-end pe-4">
+                          {o.createDate
+                            ? new Date(o.createDate).toLocaleDateString()
+                            : "-"}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td
+                        colSpan="6"
+                        className={`text-center py-5 ${theme.textMuted}`}
+                      >
+                        No orders found
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
@@ -369,184 +509,172 @@ const isAdmin = storedRole === "ROLE_ADMIN" || storedRole === "ADMIN";
           onClick={closeDetails}
         >
           <div
-            className={`card rounded-4 p-4 ${theme.modal}`}
+            className={`card rounded-4 ${theme.modalContent} shadow-lg`}
             style={{
               width: "90%",
-              maxWidth: "850px",
+              maxWidth: "500px",
+              maxHeight: "90vh",
+              display: "flex",
+              flexDirection: "column",
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* HEADER */}
-            <div className="d-flex justify-content-between align-items-start mb-4">
-              <div>
-                <h3 className="fw-bold mb-1">Order Details</h3>
+            {/* Header */}
+            <div
+              className={`p-4 border-bottom ${
+                isDarkMode ? "border-secondary" : ""
+              }`}
+            >
+              <div className="d-flex justify-content-between align-items-center">
+                <div>
+                  <h4 className={`fw-bold mb-1 ${theme.text}`}>
+                    Order Details
+                  </h4>
+                  <span
+                    className={`badge ${
+                      isDarkMode ? "bg-secondary" : "bg-primary"
+                    }`}
+                  >
+                    #{selectedOrder.orderId || selectedOrder.id}
+                  </span>
+                </div>
+                <button
+                  className="btn btn-sm btn-close"
+                  onClick={closeDetails}
+                ></button>
+              </div>
+            </div>
 
-                <p className={theme.textMuted}>
-                  #{selectedOrder.orderId || selectedOrder.id}
-                </p>
+            {/* Scrollable Body */}
+            <div className="p-4 flex-grow-1" style={{ overflowY: "auto" }}>
+              {/* Customer */}
+              <div className="mb-4">
+                <div className={`d-flex align-items-center gap-2 mb-2`}>
+                  <span
+                    className={`badge bg-info bg-opacity-20 ${
+                      isDarkMode ? "text-primary" : "text-primary"
+                    }`}
+                  >
+                    Customer
+                  </span>
+                </div>
+                <div className={`fw-semibold ${theme.text}`}>
+                  {selectedOrder.customerName || "-"}
+                </div>
+                <small className={theme.textMuted}>
+                  {selectedOrder.phoneNumber || "No phone"}
+                </small>
               </div>
 
+              {/* Order Info */}
+              <div className="mb-4">
+                <div className="row g-3">
+                  <div className="col-6">
+                    <div
+                      className={`p-3 rounded-3 ${
+                        isDarkMode ? "bg-secondary bg-opacity-10" : "bg-light"
+                      }`}
+                    >
+                      <small className={theme.textMuted}>Created</small>
+                      <div className={`fw-semibold ${theme.text}`}>
+                        {selectedOrder.createDate
+                          ? new Date(selectedOrder.createDate).toLocaleString()
+                          : "-"}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="col-6">
+                    <div
+                      className={`p-3 rounded-3 ${
+                        isDarkMode ? "bg-secondary bg-opacity-10" : "bg-light"
+                      }`}
+                    >
+                      <small className={theme.textMuted}>Cashier</small>
+                      <div className={`fw-semibold ${theme.text}`}>
+                        {selectedOrder.cashierName || "-"}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="col-6">
+                    <div
+                      className={`p-3 rounded-3 ${
+                        isDarkMode ? "bg-secondary bg-opacity-10" : "bg-light"
+                      }`}
+                    >
+                      <small className={theme.textMuted}>Cash Received</small>
+                      <div className={`fw-semibold ${theme.text}`}>
+                        Rs.{" "}
+                        {Number(selectedOrder.cashReceivedived || 0).toFixed(2)}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="col-6">
+                    <div
+                      className={`p-3 rounded-3 ${
+                        isDarkMode ? "bg-secondary bg-opacity-10" : "bg-light"
+                      }`}
+                    >
+                      <small className={theme.textMuted}>Change</small>
+                      <div className={`fw-semibold ${theme.text}`}>
+                        Rs. {Number(selectedOrder.changeAmount || 0).toFixed(2)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Items */}
+              <div className="mb-3">
+                <h6 className={`fw-bold mb-3 ${theme.text}`}>
+                  Order Items ({selectedOrder.items?.length || 0})
+                </h6>
+                <div className="d-flex flex-column gap-2">
+                  {(selectedOrder.items || []).map((it, idx) => (
+                    <div
+                      key={idx}
+                      className={`d-flex justify-content-between align-items-center p-3 rounded-3 ${
+                        isDarkMode ? "bg-secondary bg-opacity-10" : "bg-light"
+                      }`}
+                    >
+                      <div>
+                        <div className={`fw-semibold ${theme.text}`}>
+                          {it.name}
+                        </div>
+                        <small className={theme.textMuted}>
+                          Qty: {it.quantity} x Rs.{" "}
+                          {Number(it.price || 0).toFixed(2)}
+                        </small>
+                      </div>
+                      <div className="fw-bold" style={{ color: "#0d6efd" }}>
+                        Rs.{" "}
+                        {(Number(it.quantity) * Number(it.price || 0)).toFixed(
+                          2
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div
+              className={`p-4 border-top d-flex justify-content-between align-items-center ${
+                isDarkMode ? "border-secondary" : ""
+              }`}
+            >
+              <div>
+                <small className={theme.textMuted}>Total Amount</small>
+                <div className={`fw-bold fs-4`} style={{ color: "#3b82f6" }}>
+                  Rs. {Number(selectedOrder.totalAmount || 0).toFixed(2)}
+                </div>
+              </div>
               <button
-                className="btn btn-outline-secondary rounded-pill"
+                className="btn btn-secondary rounded-pill px-4"
                 onClick={closeDetails}
               >
                 Close
               </button>
-            </div>
-
-            {/* CUSTOMER */}
-            <div className="mb-4">
-              <h6 className={`fw-bold ${theme.label}`}>Customer</h6>
-
-              <div className={theme.textMuted}>
-                {selectedOrder.customerName ||
-                  selectedOrder.customer?.name ||
-                  "-"}
-              </div>
-            </div>
-
-            {/* MORE INFO */}
-            <div className="mb-4">
-              <h6 className={`fw-bold ${theme.label}`}>More Info</h6>
-
-              <div className={`row ${theme.textMuted}`}>
-                <div className="col-md-6 mb-2">
-                  <div className="small">Phone</div>
-                  <div className="fw-semibold">
-                    {selectedOrder.phoneNumber ||
-                      selectedOrder.customer?.phone ||
-                      "-"}
-                  </div>
-                </div>
-
-                <div className="col-md-6 mb-2">
-                  <div className="small">Created</div>
-                  <div className="fw-semibold">
-                    {selectedOrder.createDate ||
-                    selectedOrder.createdAt ||
-                    selectedOrder.date
-                      ? new Date(
-                          selectedOrder.createDate ||
-                            selectedOrder.createdAt ||
-                            selectedOrder.date
-                        ).toLocaleString()
-                      : "-"}
-                  </div>
-                </div>
-
-                <div className="col-md-6 mb-2">
-                  <div className="small">Total Amount</div>
-                  <div className="fw-semibold text-success">
-                    {Number(
-                      selectedOrder.totalAmount ||
-                        selectedOrder.total ||
-                        selectedOrder.amount ||
-                        0
-                    ).toLocaleString(undefined, {
-                      style: "currency",
-                      currency: "USD",
-                    })}
-                  </div>
-                </div>
-
-                <div className="col-md-6 mb-2">
-                  <div className="small">Cash Received</div>
-                  <div className="fw-semibold">
-                    {Number(
-                      selectedOrder.cashReceivedived ||
-                        selectedOrder.cashReceived ||
-                        selectedOrder.cash ||
-                        0
-                    ).toLocaleString(undefined, {
-                      style: "currency",
-                      currency: "USD",
-                    })}
-                  </div>
-                </div>
-
-                <div className="col-md-6 mb-2">
-                  <div className="small">Change</div>
-                  <div className="fw-semibold">
-                    {Number(selectedOrder.changeAmount || 0).toLocaleString(
-                      undefined,
-                      {
-                        style: "currency",
-                        currency: "USD",
-                      }
-                    )}
-                  </div>
-                </div>
-
-                <div className="col-md-6 mb-2">
-                  <div className="small">Cashier</div>
-                  <div className="fw-semibold">
-                    {selectedOrder.cashierName ||
-                      selectedOrder.createdBy ||
-                      "-"}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* ITEMS */}
-            <div className="mb-4">
-              <h6 className={`fw-bold mb-3 ${theme.label}`}>Order Items</h6>
-
-              <div className="list-group">
-                {(selectedOrder.items || selectedOrder.orderItems || []).map(
-                  (it, index) => (
-                    <div
-                      key={index}
-                      className={`list-group-item rounded-3 mb-2 ${theme.card}`}
-                    >
-                      <div className="d-flex justify-content-between align-items-center">
-                        <div>
-                          <div className="fw-semibold">
-                            {it.name || it.title || it.itemName}
-                          </div>
-
-                          <small className={theme.textMuted}>
-                            Qty: {it.quantity || it.qty || 1}
-                          </small>
-                        </div>
-
-                        <div className="fw-bold text-success">
-                          {(
-                            (it.quantity || 1) * Number(it.price || 0)
-                          ).toLocaleString(undefined, {
-                            style: "currency",
-                            currency: "USD",
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                  )
-                )}
-              </div>
-            </div>
-
-            {/* FOOTER */}
-            <div className="d-flex justify-content-between align-items-center border-top pt-3">
-              <div>
-                <div className={`small ${theme.textMuted}`}>Cashier</div>
-
-                <div className="fw-semibold">
-                  {selectedOrder.cashierName || selectedOrder.createdBy || "-"}
-                </div>
-              </div>
-
-              <div className="text-end">
-                <div className={`small ${theme.textMuted}`}>Total Amount</div>
-
-                <h3 className="fw-bold text-success mb-0">
-                  {Number(
-                    selectedOrder.totalAmount || selectedOrder.total || 0
-                  ).toLocaleString(undefined, {
-                    style: "currency",
-                    currency: "USD",
-                  })}
-                </h3>
-              </div>
             </div>
           </div>
         </div>

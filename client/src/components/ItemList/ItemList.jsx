@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 import { useTheme } from "../../context/ThemeContext"
 import { fetchItems } from "../../service/ItemService"
 
-const ItemList = ({ selectedCategoryId, onAddToCart, cart = [] }) => {
+const ItemList = ({ selectedCategoryId, onAddToCart, cart = [], refreshKey }) => {
 
     const { isDarkMode } = useTheme()
 
@@ -10,11 +10,12 @@ const ItemList = ({ selectedCategoryId, onAddToCart, cart = [] }) => {
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
+        setLoading(true)
         fetchItems().then(res => {
             setItems(res.data || [])
             setLoading(false)
         })
-    }, [])
+    }, [refreshKey])
 
     // ✅ calculate available stock from cart
     const getAvailableQty = (item) => {

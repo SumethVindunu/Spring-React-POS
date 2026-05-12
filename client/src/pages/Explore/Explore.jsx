@@ -16,6 +16,7 @@ const Explore = () => {
   const [cart, setCart] = useState([])
   const [showCheckout, setShowCheckout] = useState(false)
   const [cash, setCash] = useState(0)
+  const [itemRefreshKey, setItemRefreshKey] = useState(0)
 
   const [customer, setCustomer] = useState({
     name: "",
@@ -105,6 +106,7 @@ const processOrder = async () => {
       name: "",
       phone: ""
     })
+    setItemRefreshKey(prev => prev + 1)
 
   } catch (error) {
 
@@ -160,6 +162,7 @@ const processOrder = async () => {
                 selectedCategoryId={selectedCategoryId}
                 onAddToCart={addToCart}
                 cart={cart}
+                refreshKey={itemRefreshKey}
               />
             </div>
           </div>
